@@ -5,9 +5,10 @@ import {
   db, isoKey, seedHabits,
   addHabit, updateHabit, deactivateHabit, reorderHabits, allEntries, importEntries
 } from '../db';
+import { useAuth } from '../hooks/useAuth';
 
 // SettingsScreen (Week 5 — the real one).
-// Sections: Habits · Units · Sleep target · Export/Import CSV.
+// Sections: Account · Habits · Units · Sleep target · Export/Import CSV.
 // The developer tools (sample data + reset) are kept at the bottom, clearly
 // marked, to be removed around Week 6 before the app is shared.
 
@@ -19,6 +20,7 @@ export default function SettingsScreen() {
   const [sleepTarget, setSleepTarget] = useState(() => Number(localStorage.getItem('daytrack.sleepTarget')) || 7.5);
   const [msg, setMsg] = useState('');
   const fileRef = useRef(null);
+  const { user, signOut } = useAuth();
 
   const flash = t => { setMsg(t); setTimeout(() => setMsg(''), 2500); };
   const active = (habits || []).filter(h => h.active);
@@ -142,6 +144,15 @@ export default function SettingsScreen() {
             <span>Import from CSV / spreadsheet</span>
             <button className="ghost-btn" onClick={() => fileRef.current?.click()}>Import</button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onImportFile} />
+          </div>
+        </section>
+
+        {/* Account */}
+        <section className="card">
+          <h2>Account</h2>
+          <div className="set-row">
+            <span>Signed in as<br /><strong style={{ fontWeight: 600 }}>{user?.email}</strong></span>
+            <button className="ghost-btn" onClick={signOut}>Log out</button>
           </div>
         </section>
 
