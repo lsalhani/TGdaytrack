@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { db } from './db';
+import { db, TEMPLATE_HABITS } from './db';
 
 // ===========================================================================
 // sync.js — the cloud mirror.
@@ -24,7 +24,7 @@ const ENTRY_COLS = [
   'focused_hours', 'pushups', 'screen_time_hours', 'drink_score',
   'note', 'habits', 'created_at', 'updated_at'
 ];
-const HABIT_COLS = ['name', 'icon', 'key', 'type', 'sort_order', 'active'];
+const HABIT_COLS = ['name', 'icon', 'key', 'type', 'sort_order', 'active', 'is_default'];
 
 const pick = (obj, cols) => {
   const out = {};
@@ -94,29 +94,19 @@ async function pullHabits() {
 }
 
 // ---------------------------------------------------------------------------
-// SEED — ensure this user has the default habits in the cloud. Replaces the old
-// local-only seedHabits and is race-proof: upsert on (user_id, key) means even
-// if it runs twice, the same key just overwrites itself — never duplicates.
+// SEED — ensure a NEW user has the starter template habits in the cloud.
+// Race-proof: upsert on (user_id, key) means even if it runs twice (two devices
+// at once), the same key just overwrites itself — never duplicates.
+//
+// Uses TEMPLATE_HABITS (the small generic starter set) from db.js, NOT your
+// personal habit list. Changing the template only affects future sign-ups.
 // ---------------------------------------------------------------------------
-const DEFAULT_HABITS = [
-  { name: 'Study / GMAT', icon: '📚', type: 'boolean', key: 'study',       sort_order: 0, active: true },
-  { name: 'Gym',          icon: '🏋️', type: 'boolean', key: 'gym',         sort_order: 1, active: true },
-  { name: 'Cardio',       icon: '🏃', type: 'boolean', key: 'cardio',      sort_order: 2, active: true },
-  { name: 'Markets',      icon: '📈', type: 'boolean', key: 'markets',     sort_order: 3, active: true },
-  { name: 'News',         icon: '📰', type: 'boolean', key: 'news',        sort_order: 4, active: true },
-  { name: 'Read',         icon: '📖', type: 'boolean', key: 'read',        sort_order: 5, active: true },
-  { name: 'Journal',      icon: '✍️', type: 'boolean', key: 'journal',     sort_order: 6, active: true },
-  { name: 'Supplements',  icon: '💊', type: 'boolean', key: 'supplements', sort_order: 7, active: true },
-  { name: 'Stretching',   icon: '🧘', type: 'boolean', key: 'stretching',  sort_order: 8, active: true },
-  { name: 'Drinks',       icon: '🍷', type: 'count',   key: 'drinks',      sort_order: 9, active: true }
-];
-
 async function seedCloudHabitsIfEmpty(userId) {
   const { data, error } = await supabase
     .from('habits_config').select('key').limit(1);
   if (error) throw error;
   if (data && data.length > 0) return; // user already has habits
-  const rows = DEFAULT_HABITS.map(h => ({ ...h, user_id: userId }));
+  const rows = TEMPLATE_HABITS.map(h => ({ ...h, user_id: userId }));
   const { error: insErr } = await supabase
     .from('habits_config').upsert(rows, { onConflict: 'user_id,key' });
   if (insErr) throw insErr;
@@ -153,7 +143,8 @@ export async function reconcile() {
       await db.habits_config.bulkAdd(
         cloudHabits.map(h => ({
           name: h.name, icon: h.icon, key: h.key,
-          type: h.type, sort_order: h.sort_order, active: h.active
+          type: h.type, sort_order: h.sort_order, active: h.active,
+          is_default: h.is_default ?? false
         }))
       );
     });

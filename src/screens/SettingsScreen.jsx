@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db, isoKey, seedHabits,
-  addHabit, updateHabit, deactivateHabit, reorderHabits, allEntries, importEntries
+  addHabit, updateHabit, deactivateHabit, restoreHabit, reorderHabits,
+  allEntries, importEntries
 } from '../db';
 import { useAuth } from '../hooks/useAuth';
 
@@ -24,6 +25,7 @@ export default function SettingsScreen() {
 
   const flash = t => { setMsg(t); setTimeout(() => setMsg(''), 2500); };
   const active = (habits || []).filter(h => h.active);
+  const hidden = (habits || []).filter(h => h.active === false);
 
   // ---- Habit manager ----
   const onAdd = async () => {
@@ -37,7 +39,8 @@ export default function SettingsScreen() {
     if (name && name.trim()) await updateHabit(h.id, { name: name.trim() });
   };
   const onToggleType = h => updateHabit(h.id, { type: h.type === 'boolean' ? 'count' : 'boolean' });
-  const onDelete = h => { if (confirm(`Hide “${h.name}”? Past data is kept.`)) deactivateHabit(h.id); };
+  const onDelete = h => { if (confirm(`Hide “${h.name}”? Your past data stays intact.`)) deactivateHabit(h.id); };
+  const onRestore = h => restoreHabit(h.id);
   const move = async (i, dir) => {
     const j = i + dir;
     if (j < 0 || j >= active.length) return;
@@ -82,7 +85,10 @@ export default function SettingsScreen() {
           {active.map((h, i) => (
             <div key={h.id} className="manage-row">
               <span className="icon">{h.icon}</span>
-              <span className="name">{h.name}</span>
+              <span className="name">
+                {h.name}
+                {h.is_default && <span className="default-chip">starter</span>}
+              </span>
               <span className="type-tag">{h.type}</span>
               <span className="row-actions">
                 <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Up">↑</button>
@@ -102,6 +108,24 @@ export default function SettingsScreen() {
             />
             <button onClick={onAdd}>Add</button>
           </div>
+
+          {hidden.length > 0 && (
+            <details className="hidden-habits">
+              <summary>Hidden habits ({hidden.length})</summary>
+              {hidden.map(h => (
+                <div key={h.id} className="manage-row hidden-row">
+                  <span className="icon">{h.icon}</span>
+                  <span className="name">
+                    {h.name}
+                    {h.is_default && <span className="default-chip">starter</span>}
+                  </span>
+                  <span className="row-actions">
+                    <button className="ghost-btn" onClick={() => onRestore(h)}>Restore</button>
+                  </span>
+                </div>
+              ))}
+            </details>
+          )}
         </section>
 
         {/* Units */}
