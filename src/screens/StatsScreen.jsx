@@ -42,6 +42,13 @@ export default function StatsScreen() {
     [], []
   );
 
+  // active options habits — shown as overall done/not in the matrix, plus a
+  // per-option breakdown bar chart below.
+  const optionHabits = useLiveQuery(
+    () => db.habits_config.orderBy('sort_order').filter(h => h.active && h.type === 'options').toArray(),
+    [], []
+  );
+
   if (entries === undefined) {
     return (
       <>
@@ -179,8 +186,76 @@ export default function StatsScreen() {
                     </div>
                   );
                 })}
+                {(optionHabits || []).map(h => {
+                  const isDone = e => Array.isArray(e.habits?.[h.key]) && e.habits[h.key].length > 0;
+                  const done = entries.filter(isDone).length;
+                  const pct = Math.round((done / entries.length) * 100);
+                  return (
+                    <div className="matrix-row" key={'opt-' + h.id}>
+                      <span className="m-name">{h.icon} {h.name}</span>
+                      <span className="m-dots">
+                        {entries.map(e => (
+                          <span key={e.date}
+                            className={'dot' + (isDone(e) ? ' on' : '')}
+                            title={e.date} />
+                        ))}
+                      </span>
+                      <span className="m-pct">{pct}%</span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
+
+            {(optionHabits || []).map(h => {
+              const opts = Array.isArray(h.options) ? h.options : [];
+              // Count how many days each option key was picked in the period.
+              const counts = {};
+              for (const e of entries) {
+                const picked = e.habits?.[h.key];
+                if (Array.isArray(picked)) {
+                  for (const k of picked) counts[k] = (counts[k] || 0) + 1;
+                }
+              }
+              // Show configured options first (in order), then any historical
+              // keys no longer in the config (so renamed/removed options still
+              // show their past data rather than vanishing).
+              const labelFor = k => (opts.find(o => o.key === k)?.label) || k;
+              const configuredKeys = opts.map(o => o.key);
+              const extraKeys = Object.keys(counts).filter(k => !configuredKeys.includes(k));
+              const orderedKeys = [...configuredKeys, ...extraKeys];
+              const anyData = orderedKeys.some(k => (counts[k] || 0) > 0);
+              if (orderedKeys.length === 0) return null;
+
+              const data = {
+                labels: orderedKeys.map(labelFor),
+                datasets: [{
+                  label: 'Days',
+                  data: orderedKeys.map(k => counts[k] || 0),
+                  backgroundColor: 'rgba(13,148,136,.65)',
+                  borderRadius: 6
+                }]
+              };
+              const opt = {
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } },
+                maintainAspectRatio: false
+              };
+              return (
+                <ChartCard title={`${h.name} — breakdown`} key={'chart-' + h.id}>
+                  {anyData ? (
+                    <div style={{ height: Math.max(120, orderedKeys.length * 34) }}>
+                      <Bar data={data} options={opt} />
+                    </div>
+                  ) : (
+                    <p className="option-empty" style={{ padding: '4px 2px' }}>
+                      No {h.name.toLowerCase()} logged in this period yet.
+                    </p>
+                  )}
+                </ChartCard>
+              );
+            })}
           </>
         )}
       </main>

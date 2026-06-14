@@ -4,7 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db, isoKey, seedHabits,
   addHabit, updateHabit, deactivateHabit, restoreHabit, reorderHabits,
-  allEntries, importEntries
+  allEntries, importEntries,
+  DEFAULT_OPTIONS, parseOptions, optionsToText
 } from '../db';
 import { useAuth } from '../hooks/useAuth';
 
@@ -15,7 +16,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function SettingsScreen() {
   const habits = useLiveQuery(() => db.habits_config.orderBy('sort_order').toArray(), [], undefined);
-  const [draft, setDraft] = useState({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5 });
+  const [draft, setDraft] = useState({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5, optionsText: optionsToText(DEFAULT_OPTIONS) });
   const [weightUnit, setWeightUnit] = useState(() => localStorage.getItem('daytrack.weightUnit') || 'kg');
   const [sleepUnit, setSleepUnit] = useState(() => localStorage.getItem('daytrack.sleepUnit') || 'decimal');
   const [sleepTarget, setSleepTarget] = useState(() => Number(localStorage.getItem('daytrack.sleepTarget')) || 7.5);
@@ -36,9 +37,10 @@ export default function SettingsScreen() {
       icon: draft.icon.trim() || '•',
       type: draft.type,
       unit: draft.unit.trim(),
-      count_max: Number(draft.count_max) || 5
+      count_max: Number(draft.count_max) || 5,
+      options: draft.type === 'options' ? parseOptions(draft.optionsText) : null
     });
-    setDraft({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5 });
+    setDraft({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5, optionsText: optionsToText(DEFAULT_OPTIONS) });
   };
   const setDraftField = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const onRename = async h => {
@@ -46,9 +48,22 @@ export default function SettingsScreen() {
     if (name && name.trim()) await updateHabit(h.id, { name: name.trim() });
   };
   const onToggleType = h => {
-    const order = ['boolean', 'count', 'number'];
+    const order = ['boolean', 'count', 'number', 'options'];
     const next = order[(order.indexOf(h.type) + 1) % order.length];
-    updateHabit(h.id, { type: next });
+    const changes = { type: next };
+    // Seed a default option list when converting an existing habit to options.
+    if (next === 'options' && (!h.options || h.options.length === 0)) {
+      changes.options = DEFAULT_OPTIONS;
+    }
+    updateHabit(h.id, changes);
+  };
+  const onEditOptions = async h => {
+    const text = prompt(
+      `Options for “${h.name}” (comma-separated)`,
+      optionsToText(h.options)
+    );
+    if (text == null) return;                 // cancelled
+    await updateHabit(h.id, { options: parseOptions(text) });
   };
   const onDelete = h => { if (confirm(`Hide “${h.name}”? Your past data stays intact.`)) deactivateHabit(h.id); };
   const onRestore = h => restoreHabit(h.id);
@@ -101,14 +116,18 @@ export default function SettingsScreen() {
                 {h.is_default && <span className="default-chip">starter</span>}
               </span>
               <span className="type-tag">
-                {h.type}
+                {h.type === 'options' ? 'multi' : h.type}
                 {h.type === 'number' && h.unit ? ` · ${h.unit}` : ''}
                 {h.type === 'count' && h.count_max ? ` · 0–${h.count_max}` : ''}
+                {h.type === 'options' ? ` · ${(h.options || []).length}` : ''}
               </span>
               <span className="row-actions">
                 <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Up">↑</button>
                 <button onClick={() => move(i, 1)} disabled={i === active.length - 1} aria-label="Down">↓</button>
-                <button onClick={() => onToggleType(h)} title="boolean / count">⇄</button>
+                <button onClick={() => onToggleType(h)} title="change type">⇄</button>
+                {h.type === 'options' && (
+                  <button onClick={() => onEditOptions(h)} title="Edit options" aria-label="Edit options">⋯</button>
+                )}
                 <button onClick={() => onRename(h)} aria-label="Rename">✎</button>
                 <button onClick={() => onDelete(h)} aria-label="Hide">🗑</button>
               </span>
@@ -140,6 +159,8 @@ export default function SettingsScreen() {
                   onClick={() => setDraftField('type', 'count')}>Count</button>
                 <button className={draft.type === 'number' ? 'on' : ''}
                   onClick={() => setDraftField('type', 'number')}>Number</button>
+                <button className={draft.type === 'options' ? 'on' : ''}
+                  onClick={() => setDraftField('type', 'options')}>Multi</button>
               </div>
             </div>
             {draft.type === 'count' && (
@@ -158,6 +179,16 @@ export default function SettingsScreen() {
                   value={draft.unit}
                   onChange={e => setDraftField('unit', e.target.value)}
                   placeholder="e.g. glasses, pages, min" />
+              </div>
+            )}
+            {draft.type === 'options' && (
+              <div className="add-row options-row">
+                <span className="mini-label">Options</span>
+                <input className="unit-input"
+                  value={draft.optionsText}
+                  onChange={e => setDraftField('optionsText', e.target.value)}
+                  placeholder="Run, Swim, Gym, Push, Pull, Legs" />
+                <span className="mini-hint">comma-separated · pick any when logging</span>
               </div>
             )}
             <div className="add-row">

@@ -419,3 +419,23 @@
 }
 .add-habit-btn:hover { filter: brightness(1.05); }
 .type-tag { white-space: nowrap; }
+
+/* ---------- Options habit (Log screen) ---------- */
+.habit-options { flex-direction: column; align-items: stretch; gap: 10px; }
+.habit-options-head { display: flex; align-items: center; gap: 10px; }
+.habit-options-head .name { flex: 1; }
+.option-chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 34px; }
+.option-chip {
+  border: 1px solid var(--line); background: #fff; border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; cursor: pointer; color: var(--muted);
+  font-weight: 600; transition: all .12s;
+}
+.option-chip:hover { border-color: var(--purple-mid); }
+.option-chip.on {
+  background: var(--purple); color: #fff; border-color: var(--purple);
+}
+.option-empty { font-size: 13px; color: var(--muted); }
+
+/* ---------- Options editor (Settings) ---------- */
+.add-habit .options-row { flex-wrap: wrap; }
+.add-habit .options-row .unit-input { min-width: 60%; }

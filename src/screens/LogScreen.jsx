@@ -100,7 +100,8 @@ export default function LogScreen() {
   const setHabit = (key, val) =>
     setForm(f => {
       const habits = { ...f.habits };
-      if (val === false || val === 0 || val == null) delete habits[key];
+      const isEmptyArray = Array.isArray(val) && val.length === 0;
+      if (val === false || val === 0 || val == null || isEmptyArray) delete habits[key];
       else habits[key] = val;
       return { ...f, habits };
     });

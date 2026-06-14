@@ -28,6 +28,18 @@ db.version(3).stores({
   entries: '++id, &date, mood',
   habits_config: '++id, sort_order, is_default'
 });
+// v3 -> v4: new 'options' habit type — a yes/no that, when on, lets the user
+// pick one or more sub-options (e.g. Exercise -> run / swim / gym / push /
+// pull / legs). One new optional field on habits_config:
+//   options (array of {key, label}) — the choices this habit offers.
+// In an entry's `habits` JSON, an options habit stores an ARRAY of chosen
+// option keys, e.g. { exercise: ['run','gym'] }. Empty/absent = not done.
+// Not indexed, so the schema string is unchanged; the bump runs a clean no-op
+// upgrade and lets older rows default options to [].
+db.version(4).stores({
+  entries: '++id, &date, mood',
+  habits_config: '++id, sort_order, is_default'
+});
 
 // ---- Habit sets -----------------------------------------------------------
 // MY_HABITS  = your own personal habit list (what your account uses).
@@ -53,6 +65,35 @@ export const MY_HABITS = [
   { name: 'Stretching',   icon: '🧘', type: 'boolean', key: 'stretching',  sort_order: 8, active: true, is_default: true },
   { name: 'Drinks',       icon: '🍷', type: 'count',   key: 'drinks',      sort_order: 9, active: true, is_default: true }
 ];
+
+// Default sub-options offered when a user creates an 'options' habit (and the
+// editable starting list for the Exercise example). Each is { key, label }.
+// Users can edit this list per habit in Settings.
+export const DEFAULT_OPTIONS = [
+  { key: 'run',  label: 'Run' },
+  { key: 'swim', label: 'Swim' },
+  { key: 'gym',  label: 'Gym' },
+  { key: 'push', label: 'Push' },
+  { key: 'pull', label: 'Pull' },
+  { key: 'legs', label: 'Legs' }
+];
+
+// Turn a comma-separated string ("Run, Swim, Gym") into [{key,label}], with
+// stable slug keys and de-duplication. Used by the Settings option editor.
+export function parseOptions(text) {
+  const seen = new Set();
+  return String(text || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(label => ({ key: slugKey(label), label }))
+    .filter(o => (seen.has(o.key) ? false : (seen.add(o.key), true)));
+}
+
+// Render an option list back to a comma-separated string for editing.
+export function optionsToText(options) {
+  return (options || []).map(o => o.label).join(', ');
+}
 
 // The starter set new users get. Deliberately small and generic — they can
 // add, rename, reorder, hide, and restore from here freely.
@@ -121,7 +162,7 @@ export function allHabits() {
 
 // ---- Habit manager (Settings) — each change mirrors to the cloud ----
 
-export async function addHabit({ name, icon = '•', type = 'boolean', unit = '', count_max = 5 }) {
+export async function addHabit({ name, icon = '•', type = 'boolean', unit = '', count_max = 5, options = null }) {
   const key = slugKey(name);
   const last = await db.habits_config.orderBy('sort_order').last();
   const habit = {
@@ -130,7 +171,9 @@ export async function addHabit({ name, icon = '•', type = 'boolean', unit = ''
     active: true, is_default: false,
     // Only meaningful for their respective types, but harmless to store always.
     unit: type === 'number' ? unit : '',
-    count_max: type === 'count' ? (Number(count_max) || 5) : 5
+    count_max: type === 'count' ? (Number(count_max) || 5) : 5,
+    // For options habits, default to the standard set if none supplied.
+    options: type === 'options' ? (options && options.length ? options : DEFAULT_OPTIONS) : []
   };
   const id = await db.habits_config.add(habit);
   pushHabit(habit);
