@@ -15,12 +15,36 @@ const EMPTY = {
 
 const TAGS = ['social', 'travel', 'event', 'productive', 'rough day'];
 
+// --- Unit helpers -----------------------------------------------------------
+// Weight is ALWAYS stored in kg. lbs is a display/entry convenience only.
+const KG_PER_LB = 0.45359237;
+const kgToLb = kg => kg == null || kg === '' ? '' : Math.round((kg / KG_PER_LB) * 10) / 10;
+const lbToKg = lb => lb === '' || lb == null ? null : Math.round((Number(lb) * KG_PER_LB) * 10) / 10;
+
+// Sleep is ALWAYS stored as decimal hours. h:m is an entry/display convenience.
+const decToHM = dec => {
+  if (dec === '' || dec == null) return { h: '', m: '' };
+  const h = Math.floor(dec);
+  const m = Math.round((dec - h) * 60);
+  return { h, m };
+};
+const hmToDec = (h, m) => {
+  const hh = h === '' || h == null ? 0 : Number(h);
+  const mm = m === '' || m == null ? 0 : Number(m);
+  if (hh === 0 && mm === 0 && h === '' && m === '') return null;
+  return Math.round((hh + mm / 60) * 100) / 100;
+};
+
 export default function LogScreen() {
   const location = useLocation();
   const [viewedDate, setViewedDate] = useState(new Date(TODAY));
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+
+  // Unit preferences (set in Settings, stored in localStorage). Read on mount.
+  const weightUnit = localStorage.getItem('daytrack.weightUnit') || 'kg';
+  const sleepUnit = localStorage.getItem('daytrack.sleepUnit') || 'decimal';
 
   // If we arrived from History's "Edit" button, jump to that day.
   // History navigates with: navigate('/log', { state: { editDate: 'YYYY-MM-DD' } })
@@ -156,11 +180,30 @@ export default function LogScreen() {
           <div className="metric-row">
             <div className="metric">
               <label>Time asleep</label>
-              <div className="field">
-                <input type="number" step="0.1" inputMode="decimal" placeholder="7.5"
-                  value={form.sleep_hours} onChange={e => set('sleep_hours', e.target.value)} />
-                <span className="unit">h</span>
-              </div>
+              {sleepUnit === 'hm' ? (
+                <div className="field hm-field">
+                  <input type="number" step="1" min="0" max="24" inputMode="numeric" placeholder="7"
+                    value={decToHM(form.sleep_hours).h}
+                    onChange={e => {
+                      const { m } = decToHM(form.sleep_hours);
+                      set('sleep_hours', hmToDec(e.target.value, m) ?? '');
+                    }} />
+                  <span className="unit">h</span>
+                  <input type="number" step="5" min="0" max="59" inputMode="numeric" placeholder="30"
+                    value={decToHM(form.sleep_hours).m}
+                    onChange={e => {
+                      const { h } = decToHM(form.sleep_hours);
+                      set('sleep_hours', hmToDec(h, e.target.value) ?? '');
+                    }} />
+                  <span className="unit">m</span>
+                </div>
+              ) : (
+                <div className="field">
+                  <input type="number" step="0.1" inputMode="decimal" placeholder="7.5"
+                    value={form.sleep_hours} onChange={e => set('sleep_hours', e.target.value)} />
+                  <span className="unit">h</span>
+                </div>
+              )}
             </div>
             <div className="metric">
               <label>Sleep score</label>
@@ -174,11 +217,25 @@ export default function LogScreen() {
               <label>Weight</label>
               <div className="field">
                 <input type="number" step="0.1" inputMode="decimal"
-                  placeholder={lastWeight != null ? String(lastWeight) : '69.2'}
-                  value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} />
-                <span className="unit">kg</span>
+                  placeholder={lastWeight != null
+                    ? String(weightUnit === 'lbs' ? kgToLb(lastWeight) : lastWeight)
+                    : (weightUnit === 'lbs' ? '152.6' : '69.2')}
+                  value={weightUnit === 'lbs'
+                    ? (form.weight_kg === '' ? '' : kgToLb(form.weight_kg))
+                    : form.weight_kg}
+                  onChange={e => {
+                    const v = e.target.value;
+                    set('weight_kg', weightUnit === 'lbs'
+                      ? (v === '' ? '' : lbToKg(v))
+                      : v);
+                  }} />
+                <span className="unit">{weightUnit}</span>
               </div>
-              <div className="sub">last: {lastWeight != null ? `${lastWeight} kg` : '— kg'}</div>
+              <div className="sub">
+                last: {lastWeight != null
+                  ? `${weightUnit === 'lbs' ? kgToLb(lastWeight) : lastWeight} ${weightUnit}`
+                  : `— ${weightUnit}`}
+              </div>
             </div>
           </div>
         </section>

@@ -15,7 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function SettingsScreen() {
   const habits = useLiveQuery(() => db.habits_config.orderBy('sort_order').toArray(), [], undefined);
-  const [newHabit, setNewHabit] = useState('');
+  const [draft, setDraft] = useState({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5 });
   const [weightUnit, setWeightUnit] = useState(() => localStorage.getItem('daytrack.weightUnit') || 'kg');
   const [sleepUnit, setSleepUnit] = useState(() => localStorage.getItem('daytrack.sleepUnit') || 'decimal');
   const [sleepTarget, setSleepTarget] = useState(() => Number(localStorage.getItem('daytrack.sleepTarget')) || 7.5);
@@ -29,16 +29,27 @@ export default function SettingsScreen() {
 
   // ---- Habit manager ----
   const onAdd = async () => {
-    const name = newHabit.trim();
+    const name = draft.name.trim();
     if (!name) return;
-    await addHabit({ name });
-    setNewHabit('');
+    await addHabit({
+      name,
+      icon: draft.icon.trim() || '•',
+      type: draft.type,
+      unit: draft.unit.trim(),
+      count_max: Number(draft.count_max) || 5
+    });
+    setDraft({ name: '', icon: '', type: 'boolean', unit: '', count_max: 5 });
   };
+  const setDraftField = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const onRename = async h => {
     const name = prompt('Rename habit', h.name);
     if (name && name.trim()) await updateHabit(h.id, { name: name.trim() });
   };
-  const onToggleType = h => updateHabit(h.id, { type: h.type === 'boolean' ? 'count' : 'boolean' });
+  const onToggleType = h => {
+    const order = ['boolean', 'count', 'number'];
+    const next = order[(order.indexOf(h.type) + 1) % order.length];
+    updateHabit(h.id, { type: next });
+  };
   const onDelete = h => { if (confirm(`Hide “${h.name}”? Your past data stays intact.`)) deactivateHabit(h.id); };
   const onRestore = h => restoreHabit(h.id);
   const move = async (i, dir) => {
@@ -89,7 +100,11 @@ export default function SettingsScreen() {
                 {h.name}
                 {h.is_default && <span className="default-chip">starter</span>}
               </span>
-              <span className="type-tag">{h.type}</span>
+              <span className="type-tag">
+                {h.type}
+                {h.type === 'number' && h.unit ? ` · ${h.unit}` : ''}
+                {h.type === 'count' && h.count_max ? ` · 0–${h.count_max}` : ''}
+              </span>
               <span className="row-actions">
                 <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Up">↑</button>
                 <button onClick={() => move(i, 1)} disabled={i === active.length - 1} aria-label="Down">↓</button>
@@ -99,14 +114,55 @@ export default function SettingsScreen() {
               </span>
             </div>
           ))}
-          <div className="add-row">
-            <input
-              value={newHabit}
-              onChange={e => setNewHabit(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && onAdd()}
-              placeholder="New habit name"
-            />
-            <button onClick={onAdd}>Add</button>
+          <div className="add-habit">
+            <div className="add-row">
+              <input
+                className="icon-input"
+                value={draft.icon}
+                onChange={e => setDraftField('icon', e.target.value)}
+                placeholder="🙂"
+                maxLength={2}
+                aria-label="Icon (emoji)"
+              />
+              <input
+                value={draft.name}
+                onChange={e => setDraftField('name', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && draft.type === 'boolean' && onAdd()}
+                placeholder="New habit name"
+              />
+            </div>
+            <div className="add-row type-pick">
+              <span className="mini-label">Track as</span>
+              <div className="seg">
+                <button className={draft.type === 'boolean' ? 'on' : ''}
+                  onClick={() => setDraftField('type', 'boolean')}>Yes / No</button>
+                <button className={draft.type === 'count' ? 'on' : ''}
+                  onClick={() => setDraftField('type', 'count')}>Count</button>
+                <button className={draft.type === 'number' ? 'on' : ''}
+                  onClick={() => setDraftField('type', 'number')}>Number</button>
+              </div>
+            </div>
+            {draft.type === 'count' && (
+              <div className="add-row">
+                <span className="mini-label">Max</span>
+                <input className="num-input" type="number" min="1" max="99" step="1"
+                  value={draft.count_max}
+                  onChange={e => setDraftField('count_max', e.target.value)} />
+                <span className="mini-hint">stepper goes 0 → {Number(draft.count_max) || 5}</span>
+              </div>
+            )}
+            {draft.type === 'number' && (
+              <div className="add-row">
+                <span className="mini-label">Unit</span>
+                <input className="unit-input"
+                  value={draft.unit}
+                  onChange={e => setDraftField('unit', e.target.value)}
+                  placeholder="e.g. glasses, pages, min" />
+              </div>
+            )}
+            <div className="add-row">
+              <button className="add-habit-btn" onClick={onAdd}>Add habit</button>
+            </div>
           </div>
 
           {hidden.length > 0 && (

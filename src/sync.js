@@ -24,7 +24,7 @@ const ENTRY_COLS = [
   'focused_hours', 'pushups', 'screen_time_hours', 'drink_score',
   'note', 'habits', 'created_at', 'updated_at'
 ];
-const HABIT_COLS = ['name', 'icon', 'key', 'type', 'sort_order', 'active', 'is_default'];
+const HABIT_COLS = ['name', 'icon', 'key', 'type', 'sort_order', 'active', 'is_default', 'unit', 'count_max'];
 
 const pick = (obj, cols) => {
   const out = {};
@@ -144,7 +144,8 @@ export async function reconcile() {
         cloudHabits.map(h => ({
           name: h.name, icon: h.icon, key: h.key,
           type: h.type, sort_order: h.sort_order, active: h.active,
-          is_default: h.is_default ?? false
+          is_default: h.is_default ?? false,
+          unit: h.unit ?? '', count_max: h.count_max ?? 5
         }))
       );
     });

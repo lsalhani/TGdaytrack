@@ -16,6 +16,18 @@ db.version(2).stores({
   entries: '++id, &date, mood',
   habits_config: '++id, sort_order, is_default'
 });
+// v2 -> v3: habits can now be 'number' type (free numeric entry with a custom
+// unit label, e.g. "glasses", "pages", "min") and 'count' steppers can have a
+// configurable maximum. Two new optional fields on habits_config:
+//   unit       (string)  — label shown next to a number habit, e.g. "glasses"
+//   count_max  (integer) — upper bound for a count stepper (default 5)
+// Both are optional; older rows without them are treated as unit:'' / max:5.
+// New fields don't need to be indexed, so the schema string is unchanged —
+// the version bump alone tells Dexie to run the (no-op) upgrade cleanly.
+db.version(3).stores({
+  entries: '++id, &date, mood',
+  habits_config: '++id, sort_order, is_default'
+});
 
 // ---- Habit sets -----------------------------------------------------------
 // MY_HABITS  = your own personal habit list (what your account uses).
@@ -109,10 +121,17 @@ export function allHabits() {
 
 // ---- Habit manager (Settings) — each change mirrors to the cloud ----
 
-export async function addHabit({ name, icon = '•', type = 'boolean' }) {
+export async function addHabit({ name, icon = '•', type = 'boolean', unit = '', count_max = 5 }) {
   const key = slugKey(name);
   const last = await db.habits_config.orderBy('sort_order').last();
-  const habit = { name, icon, type, key, sort_order: (last?.sort_order ?? -1) + 1, active: true, is_default: false };
+  const habit = {
+    name, icon, type, key,
+    sort_order: (last?.sort_order ?? -1) + 1,
+    active: true, is_default: false,
+    // Only meaningful for their respective types, but harmless to store always.
+    unit: type === 'number' ? unit : '',
+    count_max: type === 'count' ? (Number(count_max) || 5) : 5
+  };
   const id = await db.habits_config.add(habit);
   pushHabit(habit);
   return id;
